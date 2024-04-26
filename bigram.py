@@ -1,3 +1,4 @@
+from typing import Literal
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
@@ -12,44 +13,49 @@ MAX_ITERS = 3000
 EVAL_INTERVAL = 300
 LEARNING_RATE = 1e-2
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
+NUM_EMBEDDING_DIMENSIONS = 32
 # --------------- #
 
 class Batcher():
-  def __init__(self):
-    self.device = DEVICE
+  def __init__(self, device: Literal['cuda', 'cpu'], batch_size: int, block_size: int):
+    self.device = device
+    self.batch_size = batch_size
+    self.block_size = block_size
     with open('input.txt', 'r', encoding='utf-8') as f:
       text = f.read()
-      self.vocab = set(text)
       my_tensors = torch.tensor(encode(text), dtype=torch.long)
       n = int(0.9*len(my_tensors))
       self.train_data = my_tensors[:n]
       self.val_data = my_tensors[n:]
+      self.vocab = set(text)
 
-  def get_batch(self, batch_size: int = BATCH_SIZE, block_size: int = BLOCK_SIZE, split: str = 'validate'):
+  def get_batch(self, split: str = 'validate'):
     data = self.train_data if split == 'train' else self.val_data
-    random_indexes = torch.randint(len(data) - block_size, (batch_size,)).to(self.device)
-    context_stack = torch.stack([data[i:i+block_size] for i in random_indexes]).to(self.device)
-    answer_stack = torch.stack([data[i+1:i+block_size+1] for i in random_indexes])
+    random_indexes = torch.randint(len(data) - self.block_size, (self.batch_size,)).to(self.device)
+    context_stack = torch.stack([data[i:i+self.block_size] for i in random_indexes]).to(self.device)
+    answer_stack = torch.stack([data[i+1:i+self.block_size+1] for i in random_indexes])
     return context_stack, answer_stack 
 
 class BigramLanguageModel(nn.Module):
-  def __init__(self, vocab_size: int):
+  def __init__(self, block_size: int, vocab_size: int, n_embd: int):
     super().__init__()
-    self.device = DEVICE
-    self.token_embedding_table = nn.Embedding(vocab_size, vocab_size)
+    # Create a table to embed both token and position
+    self.token_embedding_table = nn.Embedding(vocab_size, n_embd)
+    self.position_embedding_table = nn.Embedding(block_size, n_embd)
+    self.lm_head = nn.Linear(n_embd, vocab_size)
     self.expected_loss: np.float64 = np.log(1/vocab_size) * -1
-    self.to(self.device)
 
   def forward(self, idx: torch.Tensor, targets: torch.Tensor = None):
     # Predict next tokens
-    logits: torch.Tensor = self.token_embedding_table(idx)
-    batch, block, vocab = logits.shape
-    # Reformat logits and targets so each entry can be compared
-    logits = logits.view(batch * block, vocab)
-    targets = targets.view(batch * block)
+    tok_emb: torch.Tensor = self.token_embedding_table(idx)
+    logits = self.lm_head(tok_emb)
     if targets is None:
       loss = 0
     else:
+      batch, block, vocab = logits.shape
+      # Reformat logits and targets so each entry can be compared
+      logits = logits.view(batch * block, vocab)
+      targets = targets.view(batch * block)
       # Compare predicted tokens to actual
       loss = F.cross_entropy(logits, targets)
     return logits, loss
@@ -94,18 +100,8 @@ def train(model: nn.Module, batcher: Batcher, iterations=MAX_ITERS, lr=LEARNING_
     optimizer.zero_grad(set_to_none=True)
     loss.backward()
     optimizer.step()
-    
-def train_bag_of_words(batcher: Batcher):
-  context_stack, answer_stack = batcher.get_batch(split='train')
-  tril = torch.tril(torch.ones(BLOCK_SIZE, BLOCK_SIZE))
-  wei = torch.zeros((BLOCK_SIZE, BLOCK_SIZE))
-  wei = wei.masked_fill(tril == 0, float('-inf'))
-  wei = F.softmax(wei, dim=-1)
-  xbow = wei @ context_stack
-  return xbow, answer_stack
 
-
-b = Batcher()
-m = BigramLanguageModel(vocab_size=len(b.vocab)).to(DEVICE)
+b = Batcher(DEVICE, BATCH_SIZE, BLOCK_SIZE)
+m = BigramLanguageModel(BLOCK_SIZE, len(b.vocab), NUM_EMBEDDING_DIMENSIONS).to(DEVICE)
 
 train(m, b)
