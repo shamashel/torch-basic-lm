@@ -8,13 +8,16 @@ from encoder import encode, decode
 from bigram import BigramLanguageModel, Batcher, estimate_loss
 
 # HYPERPARAMETERS #
-BATCH_SIZE = 32 # how many sequences of tokens will we process in parallel
-BLOCK_SIZE = 8 # how long is a single token sequence (context length)
+BATCH_SIZE = 64 # how many sequences of tokens will we process in parallel
+BLOCK_SIZE = 256 # how long is a single token sequence (context length)
 MAX_ITERS = 5000
 EVAL_INTERVAL = 500
-LEARNING_RATE = 1e-3
+LEARNING_RATE = 1e-4
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
-NUM_EMBEDDING_DIMENSIONS = 32
+NUM_EMBEDDING_DIMENSIONS = 384
+NUM_HEADS = 6
+NUM_LAYERS = 6
+DROPOUT_RATE = 0.2
 # --------------- #
 
 def train_model(model: nn.Module, batcher: Batcher, iterations=MAX_ITERS, lr=LEARNING_RATE):
@@ -38,7 +41,10 @@ m = BigramLanguageModel(
   device=DEVICE,
   block_size=BLOCK_SIZE,
   vocab_size=len(b.vocab),
-  n_embd=NUM_EMBEDDING_DIMENSIONS
+  n_embd=NUM_EMBEDDING_DIMENSIONS,
+  n_head=NUM_HEADS,
+  n_layers=NUM_LAYERS,
+  dropout=DROPOUT_RATE
 ).to(DEVICE)
 
 def run_model(model: nn.Module, text: str, response_size: int = BLOCK_SIZE):
