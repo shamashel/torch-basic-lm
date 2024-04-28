@@ -31,9 +31,9 @@ class FeedForward(nn.Module):
   def __init__(self, n_embd: int):
     super().__init__()
     self.net = nn.Sequential(
-      nn.Linear(n_embd, n_embd * 4),
+      nn.Linear(n_embd, n_embd * 4), # Scale out data before applying ReLU so we get more variance
       nn.ReLU(),
-      nn.Linear(n_embd * 4, n_embd)
+      nn.Linear(n_embd * 4, n_embd) # Scale back down before returning, effectively averaging the variance from earlier
     )
 
   def forward(self, x: torch.Tensor):
