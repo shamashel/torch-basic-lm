@@ -53,5 +53,5 @@ print("Training model...")
 train_model(m, b)
 print("Training complete! Generating response...\n")
 resp = run_model(m, 'wherefore art thou', 100)
-print("Prompt: wherefore art thou")
-print("Response:", resp) # I wonder if "why are you" would work too?
+print("Prompt: wherefore art thou") # I wonder if "why are you" would work too?
+print("Response:", resp)
