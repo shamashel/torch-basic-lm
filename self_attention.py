@@ -4,11 +4,12 @@ from torch import nn
 class MultiHead(nn.Module):
   def __init__(self, num_heads: int, block_size: int, n_embd: int, head_size: int):
     super().__init__()
-    self.heads = nn.ModuleList([
-      Head(block_size, n_embd, head_size) for _ in range(num_heads)
-    ])
+    self.heads = nn.ModuleList([Head(block_size, n_embd, head_size) for _ in range(num_heads)])
+    self.proj = nn.Linear(n_embd, n_embd)
   def forward(self, x: torch.Tensor):
-    return torch.cat([head(x) for head in self.heads], dim=-1)
+    out = torch.cat([head(x) for head in self.heads], dim=-1)
+    out = self.proj(out)
+    return out
 
 class Head(nn.Module):
   def __init__(self, block_size: int, n_embd: int, head_size: int):
