@@ -45,14 +45,16 @@ class Block(nn.Module):
     head_size = n_embd // n_head
     self.sa_head = MultiHead(n_head, block_size, n_embd, head_size)
     self.ffwd = FeedForward(n_embd)
+    self.norm1 = nn.LayerNorm(n_embd)
+    self.norm2 = nn.LayerNorm(n_embd)
 
   def forward(self, x: torch.Tensor):
-    x = x + self.sa_head(x)
-    x = x + self.ffwd(x)
+    x = x + self.sa_head(self.norm1(x))
+    x = x + self.ffwd(self.norm2(x))
     return x
 
 class BigramLanguageModel(nn.Module):
-  def __init__(self, device: Literal['cuda', 'cpu'], block_size: int, vocab_size: int, n_embd: int):
+  def __init__(self, device: Literal['cuda', 'cpu'], block_size: int, vocab_size: int, n_embd: int, n_head: int = 4, n_layers: int = 3):
     super().__init__()
     self.block_size = block_size
     self.vocab_size = vocab_size
@@ -64,9 +66,8 @@ class BigramLanguageModel(nn.Module):
     self.lm_head = nn.Linear(n_embd, vocab_size)
     self.expected_loss: np.float64 = np.log(1/vocab_size) * -1
     self.blocks = nn.Sequential(
-      Block(n_embd, block_size=block_size, n_head=4),
-      Block(n_embd, block_size=block_size, n_head=4),
-      Block(n_embd, block_size=block_size, n_head=4),
+      *[Block(n_embd, block_size, n_head) for _ in range(n_layers)],
+      nn.LayerNorm(n_embd)
     )
 
   def forward(self, idx: torch.Tensor, targets: torch.Tensor = None):
