@@ -27,6 +27,30 @@ class Batcher():
     answer_stack = torch.stack([data[i+1:i+self.block_size+1] for i in random_indexes])
     return context_stack, answer_stack 
 
+class FeedForward(nn.Module):
+  def __init__(self, n_embd: int):
+    super().__init__()
+    self.net = nn.Sequential(
+      nn.Linear(n_embd, n_embd),
+      nn.ReLU(),
+      nn.Linear(n_embd, n_embd)
+    )
+
+  def forward(self, x: torch.Tensor):
+    return self.net(x)
+
+class Block(nn.Module):
+  def __init__(self, n_embd: int, block_size: int, n_head: int):
+    super().__init__()
+    head_size = n_embd // n_head
+    self.sa_head = MultiHead(n_head, block_size, n_embd, head_size)
+    self.ffwd = FeedForward(n_embd)
+
+  def forward(self, x: torch.Tensor):
+    x = x + self.sa_head(x)
+    x = x + self.ffwd(x)
+    return x
+
 class BigramLanguageModel(nn.Module):
   def __init__(self, device: Literal['cuda', 'cpu'], block_size: int, vocab_size: int, n_embd: int):
     super().__init__()
@@ -37,9 +61,13 @@ class BigramLanguageModel(nn.Module):
     # Create a table to embed both token and position
     self.token_embedding_table = nn.Embedding(vocab_size, n_embd)
     self.position_embedding_table = nn.Embedding(block_size, n_embd)
-    self.sa_head = MultiHead(4, block_size, n_embd, n_embd//4)
     self.lm_head = nn.Linear(n_embd, vocab_size)
     self.expected_loss: np.float64 = np.log(1/vocab_size) * -1
+    self.blocks = nn.Sequential(
+      Block(n_embd, block_size=block_size, n_head=4),
+      Block(n_embd, block_size=block_size, n_head=4),
+      Block(n_embd, block_size=block_size, n_head=4),
+    )
 
   def forward(self, idx: torch.Tensor, targets: torch.Tensor = None):
     # Predict next tokens
@@ -47,7 +75,7 @@ class BigramLanguageModel(nn.Module):
     tok_emb: torch.Tensor = self.token_embedding_table(idx)
     pos_emb = self.position_embedding_table(torch.arange(T, device=self.device))
     x: torch.Tensor = tok_emb + pos_emb
-    x = self.sa_head(x)
+    x = self.blocks(x)
     logits: torch.Tensor = self.lm_head(x)
     if targets is None:
       loss = 0
