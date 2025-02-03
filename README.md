@@ -1,4 +1,6 @@
 # Basic Torch Language Model
+**PROJECT HAS BEEN MOVED TO https://huggingface.co/shamashel/bad-gpt**
+
 
 Based on the [Let's build GPT](https://www.youtube.com/watch?v=kCc8FmEb1nY) video from Andrej Karpathy.
 
